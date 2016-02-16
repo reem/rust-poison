@@ -178,6 +178,45 @@ pub fn map_result<T, U, F>(result: LockResult<T>, f: F)
 
 #[cfg(test)]
 mod test {
+    use std::sync::{Mutex, Arc};
+    use std::thread;
 
+    use {Poison, RawPoison};
+
+    #[test]
+    fn test_poison() {
+        let x1 = Arc::new(Mutex::new(Poison::new(12)));
+        let x2 = x1.clone();
+
+        thread::spawn(move || {
+            let mut _ml = x1.lock().unwrap();
+            let _pl = _ml.lock().unwrap();
+            panic!();
+        }).join().unwrap_err();
+
+        match x2.lock() {
+            Err(mut p) => {
+                assert_eq!(*p.get_mut().lock().unwrap_err().into_inner().get(), 12);
+            },
+            Ok(_) => panic!("Mutex not poisoned?")
+        };
+    }
+
+    #[test]
+    fn test_raw_poison() {
+        let x1 = Arc::new(Mutex::new(RawPoison::new()));
+        let x2 = x1.clone();
+
+        thread::spawn(move || {
+            let mut _ml = x1.lock().unwrap();
+            let _pl = _ml.lock().unwrap();
+            panic!();
+        }).join().unwrap_err();
+
+        match x2.lock() {
+            Err(mut p) => { p.get_mut().lock().unwrap_err(); },
+            Ok(_) => panic!("Mutex not poisoned?")
+        };
+    }
 }
 
