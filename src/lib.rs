@@ -69,6 +69,12 @@ impl<T: ?Sized> Poison<T> {
         map_result(self.raw.lock(), move |lock| PoisonGuard { data: data, guard: lock })
     }
 
+    /// Heal the Poison, unpoisoning it if it is poisoned.
+    #[inline]
+    pub fn heal(&mut self) {
+        self.raw.heal();
+    }
+
     /// Get an immutable reference to the data in this poison.
     ///
     /// There is no guard for an immutable reference, since the data must either
@@ -131,6 +137,12 @@ impl RawPoison {
     #[inline]
     pub fn poisoned() -> RawPoison {
         RawPoison { poisoned: true }
+    }
+
+    /// Heal the RawPoison if it is poisoned.
+    #[inline]
+    pub fn heal(&mut self) {
+        self.poisoned = false;
     }
 
     /// Get a poison lock on this RawPoison.
@@ -196,7 +208,9 @@ mod test {
 
         match x2.lock() {
             Err(mut p) => {
-                assert_eq!(*p.get_mut().lock().unwrap_err().into_inner().get(), 12);
+                p.get_mut().lock().unwrap_err();
+                p.get_mut().heal();
+                p.get_mut().lock().unwrap();
             },
             Ok(_) => panic!("Mutex not poisoned?")
         };
@@ -214,7 +228,11 @@ mod test {
         }).join().unwrap_err();
 
         match x2.lock() {
-            Err(mut p) => { p.get_mut().lock().unwrap_err(); },
+            Err(mut p) => {
+                p.get_mut().lock().unwrap_err();
+                p.get_mut().heal();
+                p.get_mut().lock().unwrap();
+            },
             Ok(_) => panic!("Mutex not poisoned?")
         };
     }
